@@ -21,7 +21,6 @@ package org.apache.maven.plugin.surefire;
  */
 
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.repository.RepositorySystem;
@@ -657,12 +656,6 @@ public abstract class AbstractSurefireMojo
     private boolean trimStackTrace;
 
     /**
-     * Creates the artifact.
-     */
-    @Component
-    private ArtifactFactory artifactFactory;
-
-    /**
      * The remote plugin repositories declared in the POM.
      *
      * @since 2.2
@@ -1020,7 +1013,7 @@ public abstract class AbstractSurefireMojo
 
     private void createDependencyResolver()
     {
-        dependencyResolver = new SurefireDependencyResolver( getRepositorySystem(), getArtifactFactory(),
+        dependencyResolver = new SurefireDependencyResolver( getRepositorySystem(),
                                                                    getConsoleLogger(), getLocalRepository(),
                                                                    getRemoteRepositories(),
                                                                    getPluginName() );
@@ -1852,8 +1845,12 @@ public abstract class AbstractSurefireMojo
         ModularClasspath modularClasspath = new ModularClasspath( moduleDescriptor, testModulepath.getClassPath(),
                 packages, getTestClassesDirectory() );
 
+        Artifact[] additionalInProcArtifacts = { getCommonArtifact(), getApiArtifact(), getLoggerApiArtifact() };
+        Set<Artifact> inProcArtifacts = retainInProcArtifactsUnique( providerArtifacts, additionalInProcArtifacts );
+        Classpath inProcClasspath = createInProcClasspath( providerClasspath, inProcArtifacts );
+
         ModularClasspathConfiguration classpathConfiguration = new ModularClasspathConfiguration( modularClasspath,
-                testClasspath, providerClasspath, effectiveIsEnableAssertions(), isChildDelegation() );
+                testClasspath, providerClasspath, inProcClasspath, effectiveIsEnableAssertions(), isChildDelegation() );
 
         getConsoleLogger().debug( testClasspath.getLogMessage( "test classpath:" ) );
         getConsoleLogger().debug( testModulepath.getLogMessage( "test modulepath:" ) );
@@ -1861,6 +1858,8 @@ public abstract class AbstractSurefireMojo
         getConsoleLogger().debug( testClasspath.getCompactLogMessage( "test(compact) classpath:" ) );
         getConsoleLogger().debug( testModulepath.getCompactLogMessage( "test(compact) modulepath:" ) );
         getConsoleLogger().debug( providerClasspath.getCompactLogMessage( "provider(compact) classpath:" ) );
+        getConsoleLogger().debug( inProcClasspath.getLogMessage( "in-process classpath:" ) );
+        getConsoleLogger().debug( inProcClasspath.getCompactLogMessage( "in-process(compact) classpath:" ) );
 
         return new StartupConfiguration( providerName, classpathConfiguration, classLoaderConfiguration, isForking(),
                 false );
@@ -3422,17 +3421,6 @@ public abstract class AbstractSurefireMojo
     public void setTrimStackTrace( boolean trimStackTrace )
     {
         this.trimStackTrace = trimStackTrace;
-    }
-
-    public ArtifactFactory getArtifactFactory()
-    {
-        return artifactFactory;
-    }
-
-    @SuppressWarnings( "UnusedDeclaration" )
-    public void setArtifactFactory( ArtifactFactory artifactFactory )
-    {
-        this.artifactFactory = artifactFactory;
     }
 
     public List<ArtifactRepository> getRemoteRepositories()
